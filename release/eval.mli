@@ -34,5 +34,6 @@ val string_of_value : value -> string
  * matching pattern)
  *)
 val eval : environment -> expr -> value
+val match_opt : 'a list option -> 'a list
 
 
