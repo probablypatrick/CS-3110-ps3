@@ -93,30 +93,95 @@ let newvar () : typ =
 
 (* return the constraints for a binary operator *)
 let collect_binop (t:typ) (op:operator) (tl:typ) (tr:typ) : equation list =
-  failwith "There is not love of life without despair about life."
+  match op with
+  | Plus | Minus | Times 
+    -> [Eq (t,TInt); Eq (tl,TInt); Eq (tr,TInt)] 
+  | Gt | Lt | Eq | GtEq | LtEq | NotEq 
+    -> [Eq (t,TBool); Eq (tl,TInt); Eq (tr,TInt)]
+  | Concat 
+    -> [Eq (t,TString); Eq (tl,TString); Eq (tr,TString)]
 
 (** return the constraints for an expr
   * vars refers to a data structure that stores the types of each of the variables
   * that have been defined.
   * It is completely your decision what type of data structure you want to use for vars
   *)
-let rec collect_expr (specs:variant_spec list) vars (e : annotated_expr)
+type vars = (var * typ ref) list
+
+let rec collect_expr (specs:variant_spec list) (vars: vars) (e : annotated_expr)
                      : equation list =
-  failwith "If something is going to happen to me, I want to be there."
+  match e with
+  | AUnit (t) -> [Eq (t, TUnit)]
+  | AInt (t,n) -> [Eq (t,TInt)]
+  | ABool (t,b) -> [Eq (t, TBool)]
+  | AString (t,k) -> [Eq (t,TString)]
+  | AVar (t,x) -> [Eq (t, !(List.assoc x vars))]
+
+  | AApp (t,e1,e2) -> (collect_expr specs vars e1)
+                      @(collect_expr specs vars e2)
+
+  | ALet (t,(x,tx),e1,e2) -> [Eq (t,typeof e2); Eq (tx, (typeof e1))]
+                              @(collect_expr specs vars e1)
+                              @(collect_expr specs ((x, ref tx)::vars) e2)
+
+  | ALetRec (t,(x,tx),e1,e2) -> [Eq (t,typeof e2); Eq (tx, (typeof e1))]
+                                @(collect_expr specs ((x, ref tx)::vars) e1)
+                                @(collect_expr specs ((x, ref tx)::vars) e2)
+
+  |APair (t,e1,e2) -> [Eq (t, TStar (typeof e1, typeof e2))]
+                      @(collect_expr specs vars e1)
+                      @(collect_expr specs vars e2)
+
+  | ABinOp (t,o,e1,e2) -> (collect_binop t o (typeof e1) (typeof e2))
+                          @(collect_expr specs vars e1)
+                          @(collect_expr specs vars e2)
+
+  | AFun (t,(x,tx),e) -> [Eq (t, TArrow (tx,(typeof e)))]
+                          @(collect_expr specs ((x, ref tx)::vars) e) 
+
+  | AIf (t, e1, e2, e3) -> [Eq (t, typeof e2); Eq (typeof e1, TBool);
+                            Eq (typeof e2, typeof e3)]
+                           @(collect_expr specs vars e1)
+                           @(collect_expr specs vars e2)
+                           @(collect_expr specs vars e3) 
+
+  | AMatch (t,m,[(p,e)]) -> [Eq (t, typeof e)]
+                             @(fst (collect_pat specs p))
+                             @(collect_expr [] vars m)
+      @(collect_case specs ((snd (collect_pat specs p))@vars) (typeof m) t (p,e)) 
+
+  | AMatch (t,m,((p,e)::tl)) -> [Eq (t, typeof e)] (* type of AMatch = output*)
+                                @(fst (collect_pat specs p)) (*pattern constraints*)
+                                @(collect_expr [] vars m) (*constraints of item being matched *)
+      @(collect_case specs ((snd (collect_pat specs p))@vars) (typeof m) t (p,e))
+      (* ^ get constraints for case (p,e), using vars + vars assigned by pattern *) 
+  | _ -> failwith "nope"
 
 (** return the constraints for a match cases
   * tconst refers to the type of the parameters of the specific constructors
   * tvariant refers to the type of the variant as a whole
   *)
 and collect_case specs vs tconst tvariant ((p:annotated_pattern),(e:annotated_expr)) =
-  failwith "Since we're all going to die, it's obvious that when and
-            how don't matter."
+  match e with 
+  | AInt (t,n) -> [Eq (t,TInt)]
+  | ABool (t,b) -> [Eq (t,TBool)]
+  | AString (t,k) -> [Eq (t,TString)]
+  | AUnit (t) -> [Eq (t,TUnit)]
+  | AVar (t,x) -> [Eq (t,!(List.assoc x vs))]
+  | APair (t,e1,e2) -> [Eq (t, TStar (typeof e1, typeof e2))] 
+  | _ -> failwith "nope"
 
-(** return the constraints and variables for a pattern *)
+(** return the constraints and variables (var list?) for a pattern *)
 and collect_pat specs (p:annotated_pattern) =
-  failwith "I looked up at the mass of signs and stars in the night sky and
-            laid myself open for the first time to the benign indifference
-            of the world."
+  match p with 
+  | APUnit (t) -> ([Eq (t, TUnit)],[])
+  | APInt (t,n) -> ([Eq (t, TInt)],[])
+  | APBool (t,b) -> ([Eq (t, TBool)],[])
+  | APString (t,k) -> ([Eq (t, TString)],[]) 
+  | APVar (t,x) -> ([],[(x,ref t)])
+  | APPair (t,p1,p2) -> ([Eq (t, TStar (typeof_pat p1, typeof_pat p2))],[])
+  | _ -> failwith "nope"
+  
 
 (******************************************************************************)
 (** constraint generation                                                    **)
@@ -126,8 +191,24 @@ and collect_pat specs (p:annotated_pattern) =
  * collect traverses an expression e and returns a list of equations that must
  * be satisfied for e to typecheck.
  *)
-let collect specs e =
-  failwith "Aujourd'hui maman est morte. Ou peut-etre hier, je ne sais pas."
+
+let collect (specs: variant_spec list) (e: annotated_expr) : equation list = 
+  match e with
+  | AUnit t -> [Eq (t,TUnit)]
+  | AInt (t,n) -> [Eq (t,TInt)]
+  | ABool (t,b) -> [Eq (t,TBool)]
+  | AString (t,k) -> [Eq (t,TString)]
+  | AVar (t,x) -> []
+  | AApp (t,e1,e2) -> collect_expr specs [] (AApp (t,e1,e2))
+  | AFun (t,(x,tx),e) 
+    -> [Eq (t,TArrow (tx, (typeof e)))]@(collect_expr specs [(x,ref tx)] e) 
+  | ALet (t,(x,tx),e1,e2) -> collect_expr specs [] (ALet (t,(x,tx),e1,e2))
+  | ALetRec (t,(x,tx),e1,e2) -> collect_expr specs [] (ALetRec (t,(x,tx),e1,e2))
+  | APair (t,e1,e2) -> collect_expr specs [] (APair (t,e1,e2))
+  | ABinOp (t,o,e1,e2) -> collect_expr specs [] (ABinOp (t,o,e1,e2))
+  | AIf (t,e1,e2,e3) -> collect_expr specs [] (AIf (t,e1,e2,e3))
+  | AMatch (t,m,l) -> collect_expr specs [] (AMatch (t,m,l))
+  | _ -> failwith "nope"
 
 (******************************************************************************)
 (** constraint solver (unification)                                          **)

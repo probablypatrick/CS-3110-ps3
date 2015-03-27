@@ -7,6 +7,7 @@ open TypedAst
 
 (** Eq (t1,t2) is an assertion that t1 must be equal to t2 *)
 type equation = Eq of typ * typ
+type vars = (var * typ ref) list
 
 (** Functions for printing lists of equations *)
 val format_eqns    : Format.formatter -> equation list -> unit
@@ -27,5 +28,6 @@ val collect : variant_spec list -> annotated_expr -> equation list
  * given an expression, return the type for that expression,
  * failing if it cannot be typed.
  *)
+
 val infer : variant_spec list -> expr -> annotated_expr
 

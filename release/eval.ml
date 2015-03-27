@@ -12,6 +12,11 @@ type value =
   | VError of string
 and environment = (var * value ref) list
 
+(* Extract contents of environment option for use in eval*)
+let match_opt o =
+  match o with
+  | None -> []
+  | Some (e) -> e
 (* Takes a pattern and value and returns resulting bindings (if any) as
  * an environment option. None denotes no match found *)
 let rec find_match (p : pattern) (v : value) : environment option =
@@ -29,12 +34,6 @@ let rec find_match (p : pattern) (v : value) : environment option =
                                   then Some ((match_opt ao)@(match_opt bo)) 
                                   else None
   | _ -> None
-
-(* Extract contents of environment option for use in eval*)
-let match_opt o =
-  match o with
-  | None -> []
-  | Some (e) -> e
 
 (** apply the given operator to the given arguments *)
 let rec eval_operator (op : operator) (v1 : value) (v2 : value) : value =
@@ -69,40 +68,32 @@ let string_of_value = Printer.make_string_of format_value
 
 let rec eval (env: environment) (e: expr) : value = 
   match e with
-  | Unit     -> VUnit
-  | Int x    -> VInt (x)
-  | Bool x   -> VBool (x)
-  | String x -> VString (x) 
-  | BinOp (o,a,b)  -> eval_operator o (eval env a) (eval env b)
-  | If (a,b,c)     -> if (VBool true) = (eval env a) 
-                      then (eval env b) 
-                      else (eval env c)  
-  | Var x          -> !(List.assoc x env)
-  | Fun (v,a)      -> VClosure ((v), (a), env)
-  | Pair (a,b)     -> VPair ((eval env a), (eval env b))
-  | Variant (c,a)  -> VVariant (c, (eval env a))
-  | Let (v,a,b)    -> eval ((v,(ref (eval [] a)))::env) b
-  | LetRec (v,a,b)       -> let env' = ((v, ref (VInt 0))::env) in 
-                            let a' = eval env' a in 
-                            begin
-                              (List.assoc v env') := a';
-                              eval env' b
-                            end
-  | App (a,b)            -> eval (("x", (ref (eval [] b)))::env) a
-  | Match (a, [(p,e)])   -> let env' = find_match p (eval env a) in
+  | Unit            -> VUnit
+  | Int      x      -> VInt (x)
+  | Bool     x      -> VBool (x)
+  | String   x      -> VString (x) 
+  | BinOp   (o,a,b) -> eval_operator o (eval env a) (eval env b)
+  | If      (a,b,c) -> if (VBool true) = (eval env a) 
+                       then (eval env b) 
+                       else (eval env c)  
+  | Var     x       -> !(List.assoc x env)
+  | Fun     (v,a)   -> VClosure ((v), (a), env)
+  | Pair    (a,b)   -> VPair ((eval env a), (eval env b))
+  | Variant (c,a)   -> VVariant (c, (eval env a))
+  | Let     (v,a,b) -> eval ((v,(ref (eval [] a)))::env) b
+  | LetRec  (v,a,b) -> let env' = ((v, ref (VInt 0))::env) in 
+                         let a' = eval env' a in 
+                         begin
+                           (List.assoc v env') := a';
+                           eval env' b
+                         end
+  | App     (a,b)          -> eval (("x", (ref (eval [] b)))::env) a
+  | Match   (a, [(p,e)])   -> let env' = find_match p (eval env a) in
                               if env' == None 
                               then VError "no match" 
                               else eval ((match_opt env')@env) e
-  | Match (a,((p,e)::t)) -> let env' = find_match p (eval env a) in 
+  | Match   (a,((p,e)::t)) -> let env' = find_match p (eval env a) in 
                               if env' == None 
                               then eval env (Match (a,t)) 
                               else eval ((match_opt env')@env) e
   | _ -> VError "Not valid expression"
-
-type value =
-  | VUnit | VInt of int | VBool of bool | VString of string
-  | VClosure of var * expr * environment
-  | VVariant of constructor * value
-  | VPair of value * value
-  | VError of string
-and environment = (var * value ref) list

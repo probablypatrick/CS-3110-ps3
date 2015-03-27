@@ -15,7 +15,7 @@ let rec map f s = match s with
   | Stream (h,t) -> Stream(f h, fun () -> map f (t ()))
 
 (*'a stream stream -> 'a stream;; takes a stream of streams, returns only diag elements*)
-let rec diag s = match s with
+(*let rec diag s = match s with
   | Stream (Stream (ih,_), ot) -> Stream (ih, (fun () ->
     match (ot ()) with
     | Stream (Stream (_,it),_) -> diag (Stream (it (), fun () -> 
@@ -26,6 +26,8 @@ let rec diag s =
   | Stream (h,t) -> if n = 0 then h else f (t ()) (n-1) in 
   match s with
   | Stream (h,t) -> Stream ((f h , fun () -> diag )
+*)
+let rec diag s = failwith "I'm bad and I should feel bad"
 
 (* return stream of suffix streams *)  
 let rec suffixes s = match s with
@@ -35,16 +37,20 @@ let rec suffixes s = match s with
 let rec interleave s s' = match s with
   | Stream (h,t) -> Stream (h, fun () -> interleave s' (t ()))
   
+(* illuminerti *)
 let fibs         () = 
   let rec f a b =
     Stream (a, fun () -> f b (a + b)) 
   in f 0 1
 
+(* outputs stream of partial sum of pi *)
 let pi           () = 
   let rec f a b = 
     Stream(b, fun () -> f (a+.1.) (b+.(4.*.((-1.)**a)/.(2.*.a+.1.))))
   in f 1. 4.
 
+(* Outputs stream of int lists that represent the read-aloud version of each
+ * preceding list *)
 let look_and_say () = 
   let rec makelist a b=
     match a with
